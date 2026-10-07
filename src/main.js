@@ -41,23 +41,59 @@ export function navigateTo(route, params = {}) {
 
     case 'game':
       root.innerHTML = `
-        <div id="game-ui-overlay" style="position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; z-index: 10; padding: 16px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
-          <button id="btn-exit-game" class="btn secondary-btn small" style="pointer-events: auto;" type="button">✕ Leave Arena</button>
+        <div id="game-ui-container" style="position: absolute; inset: 0; pointer-events: none; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; box-sizing: border-box; font-family: var(--font-mono);">
           
-          <!-- Desync-Proof Synced Match Timer -->
-          <div style="background: rgba(10, 16, 26, 0.85); border: 1px solid var(--border-dim); padding: 8px 18px; border-radius: 6px; display: flex; gap: 8px; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4);">
-            <span style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase;">Zone Collapse</span>
-            <span id="timer-val" style="font-family: var(--font-display); font-size: 1.15rem; color: var(--tactical-amber); letter-spacing: 1px;">02:00</span>
+          <!-- TOP HEADER: LEAVE BTN + DESYNC-PROOF TIMER -->
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%;">
+            <button id="btn-exit-game" class="btn secondary-btn small" style="pointer-events: auto;" type="button">✕ Leave Match</button>
+            
+            <div style="background: rgba(12, 17, 26, 0.9); border: 1px solid var(--border-dim); padding: 8px 24px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
+              <span style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;">Storm Shrinking</span>
+              <span id="timer-val" style="font-family: var(--font-display); font-size: 1.5rem; color: var(--tactical-amber); letter-spacing: 2px;">02:00</span>
+            </div>
+
+            <div style="width: 90px;"></div> <!-- Spacer for balance -->
           </div>
 
-          <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--terminal-green); background: rgba(10, 16, 26, 0.85); border: 1px solid var(--border-dim); padding: 8px 14px; border-radius: 6px;">
-            WASD / ARROWS to Move
+          <!-- BOTTOM HUD: BARS & 5-SLOT INVENTORY -->
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 8px;">
+            
+            <!-- Vitals (Shield & Health) -->
+            <div style="display: flex; flex-direction: column; gap: 6px; width: 320px; background: rgba(10, 14, 22, 0.85); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 4px 12px rgba(0,0,0,0.6);">
+              <!-- Shield Bar -->
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: #00d2ff; margin-bottom: 3px;">
+                  <span>SHIELD</span>
+                  <span id="shield-text">50 / 100</span>
+                </div>
+                <div style="width: 100%; height: 8px; background: rgba(0,0,0,0.6); border-radius: 4px; overflow: hidden; border: 1px solid rgba(0, 210, 255, 0.2);">
+                  <div id="shield-fill" style="width: 50%; height: 100%; background: linear-gradient(90deg, #0088cc, #00d2ff); transition: width 0.2s ease;"></div>
+                </div>
+              </div>
+
+              <!-- Health Bar -->
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: #00ff88; margin-bottom: 3px;">
+                  <span>HEALTH</span>
+                  <span id="hp-text">100 / 100</span>
+                </div>
+                <div style="width: 100%; height: 10px; background: rgba(0,0,0,0.6); border-radius: 5px; overflow: hidden; border: 1px solid rgba(0, 255, 136, 0.2);">
+                  <div id="hp-fill" style="width: 100%; height: 100%; background: linear-gradient(90deg, #00aa55, #00ff88); transition: width 0.2s ease;"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 5-Slot Hotbar -->
+            <div id="inventory-bar" style="display: flex; gap: 8px; pointer-events: auto;">
+              <!-- Slots 0-4 generated dynamically in arena.js -->
+            </div>
+
           </div>
+
         </div>
-        <canvas id="game-canvas" style="display: block; width: 100vw; height: 100vh; background: #080d16;"></canvas>
+        <canvas id="game-canvas" style="display: block; width: 100vw; height: 100vh; background: #070b12;"></canvas>
       `;
 
-      // Dynamically load arena module and start loop
       import('./game/arena.js').then(({ GameArena }) => {
         const canvas = document.getElementById('game-canvas');
         if (canvas) {
@@ -76,7 +112,6 @@ export function navigateTo(route, params = {}) {
 
 async function init() {
   supabase.auth.onAuthStateChange(async (event, session) => {
-    // Prevent unneeded re-routing when switching tabs or refreshing auth tokens
     if (isInitialized && (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED')) {
       if (session?.user) AppState.user = session.user;
       return;
@@ -84,21 +119,15 @@ async function init() {
 
     if (session?.user) {
       AppState.user = session.user;
-      
       try {
         AppState.profile = await getProfile(session.user.id);
       } catch (err) {
         console.error('Failed to load profile:', err);
       }
 
-      // If user is already on an active screen, don't kick them out
-      if (AppState.activeRoute && AppState.activeRoute !== 'auth') {
-        return;
-      }
+      if (AppState.activeRoute && AppState.activeRoute !== 'auth') return;
 
       isInitialized = true;
-
-      // Restore active room if reconnecting or reloading mid-party
       try {
         const activeRoom = await getActiveRoomForUser(session.user.id);
         if (activeRoom) {
@@ -108,7 +137,7 @@ async function init() {
           return;
         }
       } catch (err) {
-        console.warn('No active room to restore:', err);
+        console.warn('No active room:', err);
       }
 
       navigateTo('lobby');
