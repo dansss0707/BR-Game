@@ -145,11 +145,16 @@ export async function updateMemberStatus(memberId, newStatus) {
   }
 }
 
-// 5. Host launches the match
+// Replace setRoomStatus in src/services/rooms.js
 export async function setRoomStatus(roomId, newStatus) {
+  const payload = { status: newStatus };
+  if (newStatus === 'in_progress') {
+    payload.started_at = new Date().toISOString();
+  }
+
   const { error } = await supabase
     .from('game_rooms')
-    .update({ status: newStatus })
+    .update(payload)
     .eq('id', roomId);
 
   if (error) throw error;
