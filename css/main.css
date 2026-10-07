@@ -1,0 +1,177 @@
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,400;0,600;0,700;1,700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+:root {
+  --bg-deep: #08090b;
+  --bg-surface: #0e1116;
+  --bg-panel: #141820;
+  --bg-panel-highlight: #1b212c;
+  
+  --border-dim: #212936;
+  --border-sharp: #344256;
+  --border-glow: #ff471a;
+
+  /* Tactical Color Palette */
+  --hazard-orange: #ff471a;
+  --hazard-dark: #b82a06;
+  --tactical-amber: #ffaa00;
+  --terminal-green: #00ff7f;
+  --radar-cyan: #00e5ff;
+  --danger-red: #ff2244;
+
+  --text-primary: #e6edf3;
+  --text-muted: #7d8a9e;
+  --text-dim: #444e5e;
+
+  --font-display: 'Chakra Petch', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-display);
+  background-color: var(--bg-deep);
+  color: var(--text-primary);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  user-select: none;
+  background-image: 
+    radial-gradient(circle at 50% 20%, rgba(255, 71, 26, 0.05) 0%, transparent 60%),
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 100% 100%, 32px 32px, 32px 32px;
+}
+
+/* Dynamic Root Container */
+#app-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100vw;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* View Container */
+.view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.view.hidden {
+  display: none !important;
+}
+
+/* Military / Tactical Cut-Corner Buttons */
+.btn {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 12px 26px;
+  border: 1px solid var(--border-sharp);
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  cursor: pointer;
+  clip-path: polygon(
+    10px 0%, 
+    100% 0%, 
+    100% calc(100% - 10px), 
+    calc(100% - 10px) 100%, 
+    0% 100%, 
+    0% 10px
+  );
+  position: relative;
+  transition: transform 0.06s ease, background 0.15s ease, border-color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; width: 3px; height: 100%;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.btn:hover {
+  background: var(--bg-panel-highlight);
+  border-color: var(--text-muted);
+}
+
+.btn:active {
+  transform: translateY(2px);
+}
+
+.btn.primary-btn {
+  background: linear-gradient(135deg, var(--hazard-orange) 0%, var(--hazard-dark) 100%);
+  border-color: #ff6e4a;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 4px 16px rgba(255, 71, 26, 0.35);
+}
+
+.btn.primary-btn:hover {
+  background: linear-gradient(135deg, #ff572c 0%, #c43008 100%);
+  box-shadow: 0 6px 20px rgba(255, 71, 26, 0.55);
+}
+
+.btn.secondary-btn {
+  background: #11151c;
+  border: 1px solid var(--border-dim);
+}
+
+.btn.secondary-btn:hover {
+  border-color: var(--hazard-orange);
+}
+
+.btn.small {
+  padding: 6px 16px;
+  font-size: 0.75rem;
+  clip-path: polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px);
+}
+
+/* Toast Notifications */
+.toast-container {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 9999;
+}
+
+.toast {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
+  padding: 12px 20px;
+  background: rgba(14, 17, 22, 0.95);
+  border-left: 3px solid var(--hazard-orange);
+  border-top: 1px solid var(--border-dim);
+  border-right: 1px solid var(--border-dim);
+  border-bottom: 1px solid var(--border-dim);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.8);
+  color: #fff;
+  animation: hudAlert 0.15s ease-out;
+}
+
+@keyframes hudAlert {
+  from { transform: translateX(20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}

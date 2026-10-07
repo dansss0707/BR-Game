@@ -1,0 +1,59 @@
+#view-game {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #000;
+}
+
+#game-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#game-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 24px;
+}
+
+#zone-timer {
+  align-self: center;
+  background: rgba(14, 18, 24, 0.85);
+  backdrop-filter: blur(8px);
+  padding: 8px 18px;
+  border-radius: 20px;
+  border: 1px solid var(--accent-red);
+  font-weight: 700;
+  color: #fff;
+  font-size: 0.9rem;
+}
+
+#timer-val {
+  color: var(--accent-red);
+}
+
+#player-status {
+  width: 260px;
+}
+
+.hp-bar {
+  width: 100%;
+  height: 14px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 7px;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+#hp-fill {
+  width: 100%;
+  height: 100%;
+  background: var(--accent-green);
+  transition: width 0.15s ease;
+}

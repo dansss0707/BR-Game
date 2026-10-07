@@ -1,0 +1,198 @@
+#view-auth {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  position: relative;
+  min-height: 100vh;
+}
+
+/* Corner Crosshairs */
+.auth-crosshair {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 1.25rem;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+.auth-crosshair.top-left { top: 24px; left: 24px; }
+.auth-crosshair.top-right { top: 24px; right: 24px; }
+
+/* Bottom-Left Live Telemetry HUD */
+.auth-telemetry {
+  position: absolute;
+  bottom: 24px;
+  left: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 1px;
+  background: rgba(10, 12, 16, 0.75);
+  border-left: 2px solid var(--border-sharp);
+  padding: 8px 12px;
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+
+.telemetry-row {
+  display: flex;
+  gap: 8px;
+}
+
+.telemetry-row .label {
+  color: var(--text-dim);
+}
+
+.telemetry-row .val {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.telemetry-row .val.online {
+  color: var(--terminal-green);
+}
+
+.telemetry-row .val.offline {
+  color: var(--danger-red);
+}
+
+.telemetry-row .val.warn {
+  color: var(--tactical-amber);
+}
+
+/* Auth Card and Forms */
+.auth-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-dim);
+  position: relative;
+  padding: 40px 32px 32px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8);
+}
+
+.auth-card::before {
+  content: '';
+  position: absolute;
+  top: -1px; left: -1px; width: 14px; height: 14px;
+  border-top: 2px solid var(--hazard-orange);
+  border-left: 2px solid var(--hazard-orange);
+}
+
+.auth-card::after {
+  content: '';
+  position: absolute;
+  bottom: -1px; right: -1px; width: 14px; height: 14px;
+  border-bottom: 2px solid var(--hazard-orange);
+  border-right: 2px solid var(--hazard-orange);
+}
+
+.logo {
+  font-family: var(--font-display);
+  font-size: 2.4rem;
+  font-weight: 700;
+  letter-spacing: 4px;
+  text-align: center;
+  color: #fff;
+  line-height: 1;
+  text-transform: uppercase;
+  font-style: italic;
+}
+
+.logo span {
+  color: var(--hazard-orange);
+  text-shadow: 0 0 20px rgba(255, 71, 26, 0.4);
+}
+
+.subtitle {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  text-align: center;
+  font-size: 0.7rem;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  margin-top: 8px;
+  margin-bottom: 28px;
+}
+
+.tab-buttons {
+  display: flex;
+  background: #080a0d;
+  border: 1px solid var(--border-dim);
+  padding: 3px;
+  margin-bottom: 24px;
+}
+
+.tab-buttons button {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tab-buttons button.active {
+  background: var(--bg-panel);
+  color: #fff;
+  border-bottom: 2px solid var(--hazard-orange);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.auth-form.hidden {
+  display: none;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.field input {
+  background: #090c10;
+  border: 1px solid var(--border-sharp);
+  padding: 12px 14px;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.field input:focus {
+  border-color: var(--hazard-orange);
+  box-shadow: 0 0 10px rgba(255, 71, 26, 0.25);
+}
+
+.field .hint {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  min-height: 16px;
+  margin-top: 2px;
+}
+
+.hint.error {
+  color: var(--danger-red);
+}

@@ -1,0 +1,152 @@
+#view-crates {
+  background: radial-gradient(circle at center, #1b2434 0%, #080a0e 100%);
+  padding: 30px;
+  align-items: center;
+}
+
+.crates-layout {
+  width: 100%;
+  max-width: 900px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.crates-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.crates-header h2 {
+  font-size: 1.5rem;
+  letter-spacing: 1px;
+}
+
+.crate-machine {
+  position: relative;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 30px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  overflow: hidden;
+}
+
+.spinner-indicator {
+  position: absolute;
+  top: 15px;
+  bottom: 85px;
+  left: 50%;
+  width: 4px;
+  background: var(--accent-gold);
+  transform: translateX(-50%);
+  z-index: 10;
+  box-shadow: 0 0 12px var(--accent-gold);
+}
+
+.spinner-wrapper {
+  width: 100%;
+  max-width: 800px;
+  height: 140px;
+  overflow: hidden;
+  background: var(--bg-dark);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  position: relative;
+}
+
+.spinner-track {
+  display: flex;
+  gap: 12px;
+  position: absolute;
+  left: 0;
+  top: 10px;
+  will-change: transform;
+}
+
+.crate-card {
+  width: 110px;
+  height: 120px;
+  flex-shrink: 0;
+  background: var(--bg-card);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.crate-card .icon {
+  font-size: 2.2rem;
+}
+
+/* Item Rarities */
+.rarity-common { border-color: #8b9bb4; }
+.rarity-rare { border-color: var(--accent-blue); box-shadow: inset 0 0 10px rgba(0, 176, 255, 0.2); }
+.rarity-epic { border-color: #d500f9; box-shadow: inset 0 0 12px rgba(213, 0, 249, 0.25); }
+.rarity-legendary { border-color: var(--accent-gold); box-shadow: inset 0 0 16px rgba(255, 179, 0, 0.4); }
+
+.inventory-section {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 24px;
+}
+
+.inventory-section h3 {
+  font-size: 1.1rem;
+  margin-bottom: 16px;
+}
+
+.inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 12px;
+}
+
+.inventory-item {
+  position: relative;
+  background: var(--bg-card);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.inventory-item:hover {
+  transform: translateY(-2px);
+  border-color: #fff;
+}
+
+.inventory-item.equipped {
+  border-color: var(--accent-green);
+  box-shadow: 0 0 12px rgba(0, 230, 118, 0.35);
+}
+
+.inventory-item.equipped::after {
+  content: "EQUIPPED";
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 0.6rem;
+  background: var(--accent-green);
+  color: #000;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
