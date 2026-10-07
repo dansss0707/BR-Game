@@ -26,30 +26,57 @@ export function navigateTo(route, params = {}) {
     case 'auth':
       mountAuthView(root);
       break;
+
     case 'lobby':
       mountLobbyView(root);
       break;
+
     case 'crates':
       mountCratesView(root);
       break;
+
     case 'rooms':
       mountRoomsView(root, params);
       break;
+
     case 'game':
       root.innerHTML = `
-        <div id="game-hud">
-          <div id="zone-timer">Storm closing: <span id="timer-val">01:30</span></div>
-          <div id="player-status"><div class="hp-bar"><div id="hp-fill"></div></div></div>
+        <div id="game-ui-overlay" style="position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; z-index: 10; padding: 16px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
+          <button id="btn-exit-game" class="btn secondary-btn small" style="pointer-events: auto;" type="button">✕ Leave Arena</button>
+          
+          <!-- Desync-Proof Synced Match Timer -->
+          <div style="background: rgba(10, 16, 26, 0.85); border: 1px solid var(--border-dim); padding: 8px 18px; border-radius: 6px; display: flex; gap: 8px; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4);">
+            <span style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase;">Zone Collapse</span>
+            <span id="timer-val" style="font-family: var(--font-display); font-size: 1.15rem; color: var(--tactical-amber); letter-spacing: 1px;">02:00</span>
+          </div>
+
+          <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--terminal-green); background: rgba(10, 16, 26, 0.85); border: 1px solid var(--border-dim); padding: 8px 14px; border-radius: 6px;">
+            WASD / ARROWS to Move
+          </div>
         </div>
-        <canvas id="game-canvas"></canvas>
+        <canvas id="game-canvas" style="display: block; width: 100vw; height: 100vh; background: #080d16;"></canvas>
       `;
+
+      // Dynamically load arena module and start loop
+      import('./game/arena.js').then(({ GameArena }) => {
+        const canvas = document.getElementById('game-canvas');
+        if (canvas) {
+          const arena = new GameArena(canvas, AppState.currentRoom, AppState.user, AppState.profile);
+          arena.start();
+
+          document.getElementById('btn-exit-game')?.addEventListener('click', () => {
+            arena.stop();
+            navigateTo('lobby');
+          });
+        }
+      });
       break;
   }
 }
 
 async function init() {
   supabase.auth.onAuthStateChange(async (event, session) => {
-    // Ignore routine token refreshes or tab-focus triggers if already inside a view
+    // Prevent unneeded re-routing when switching tabs or refreshing auth tokens
     if (isInitialized && (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED')) {
       if (session?.user) AppState.user = session.user;
       return;
@@ -64,14 +91,14 @@ async function init() {
         console.error('Failed to load profile:', err);
       }
 
-      // If we are already on an active screen, don't kick the user out on tab switch
+      // If user is already on an active screen, don't kick them out
       if (AppState.activeRoute && AppState.activeRoute !== 'auth') {
         return;
       }
 
       isInitialized = true;
 
-      // Check if user has an active room to restore
+      // Restore active room if reconnecting or reloading mid-party
       try {
         const activeRoom = await getActiveRoomForUser(session.user.id);
         if (activeRoom) {
