@@ -1,5 +1,5 @@
-import { supabase } from '../services/supabase.js';
-import { NAME_COLORS } from '../services/profile.js';
+import { supabase } from './services/supabase.js';
+import { NAME_COLORS } from './services/profile.js';
 
 // Base weapons and items catalog
 export const WEAPON_TYPES = {
