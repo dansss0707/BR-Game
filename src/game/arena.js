@@ -1,7 +1,8 @@
-import { supabase } from '../services/supabase.js';
-import { NAME_COLORS } from '../services/profile.js';
+import { supabase } from './services/supabase.js';
+import { NAME_COLORS } from './services/profile.js';
 
-export const WEAPON_REGISTRY = {
+// Base weapons and items catalog
+export const WEAPON_TYPES = {
   ar: { 
     id: 'ar', 
     name: 'Assault Rifle', 
@@ -55,8 +56,8 @@ export const WEAPON_REGISTRY = {
     bulletColor: '#e9d5ff',
     barrelLen: 22
   },
-  mini_pot: { 
-    id: 'mini_pot', 
+  shield_pot: { 
+    id: 'shield_pot', 
     name: 'Shield Mini', 
     short: 'SHIELD', 
     icon: '🧪', 
@@ -75,21 +76,21 @@ export class GameArena {
     this.user = user;
     this.profile = profile || { username: 'Player', equipped_color: 'color_white', equipped_effect: 'effect_none' };
 
-    // Host status dictates authoritative timer
+    // Host status dictates authoritative clock
     this.isHost = !room || room.host_id === user.id;
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
 
-    // Local Player
+    // Local Player Vitals & Inventory
     this.player = {
       id: user.id,
       name: profile?.username || 'Player',
       colorId: profile?.equipped_color || 'color_white',
       effectId: profile?.equipped_effect || 'effect_none',
-      x: 150 + Math.random() * 400,
-      y: 150 + Math.random() * 300,
-      radius: 19,
+      x: 200 + Math.random() * 400,
+      y: 200 + Math.random() * 300,
+      radius: 20,
       speed: 4.2,
       health: 100,
       shield: 50,
@@ -97,18 +98,18 @@ export class GameArena {
       selectedSlot: 0,
       lastShotTime: 0,
       inventory: [
-        { ...WEAPON_REGISTRY.ar },
-        { ...WEAPON_REGISTRY.shotgun },
-        { ...WEAPON_REGISTRY.pistol },
-        { ...WEAPON_REGISTRY.sniper },
-        { ...WEAPON_REGISTRY.mini_pot }
+        { ...WEAPON_TYPES.ar },
+        { ...WEAPON_TYPES.shotgun },
+        { ...WEAPON_TYPES.pistol },
+        { ...WEAPON_TYPES.sniper },
+        { ...WEAPON_TYPES.shield_pot }
       ]
     };
 
     // Remote Players Map: id -> player
     this.remotePlayers = new Map();
 
-    // Active Projectiles (local simulation + networked hits)
+    // Active Projectiles
     this.bullets = [];
 
     // Inputs
@@ -121,7 +122,7 @@ export class GameArena {
     this.timerDisplay = document.getElementById('timer-val');
     this.hostTimerInterval = null;
 
-    // Networking
+    // Network
     this.channel = null;
     this.broadcastInterval = null;
     this.running = false;
@@ -174,11 +175,12 @@ export class GameArena {
     if (index < 0 || index > 4) return;
     this.player.selectedSlot = index;
 
+    // Use consumable directly if chosen
     const item = this.player.inventory[index];
     if (item && item.isConsumable) {
       if (this.player.shield < 100) {
         this.player.shield = Math.min(100, this.player.shield + item.shieldAmount);
-        item.count--;
+        item.count = (item.count || 1) - 1;
         if (item.count <= 0) {
           this.player.inventory[index] = null;
         }
@@ -197,11 +199,11 @@ export class GameArena {
       const isSelected = this.player.selectedSlot === idx;
       return `
         <div class="inv-slot" data-slot="${idx}" style="
-          width: 60px; 
-          height: 60px; 
-          background: ${isSelected ? 'rgba(30, 41, 59, 0.95)' : 'rgba(15, 23, 42, 0.8)'};
+          width: 58px; 
+          height: 58px; 
+          background: ${isSelected ? 'rgba(30, 41, 59, 0.95)' : 'rgba(15, 23, 42, 0.75)'};
           border: 2px solid ${isSelected ? 'var(--tactical-amber)' : 'rgba(255,255,255,0.1)'};
-          box-shadow: ${isSelected ? '0 0 10px rgba(255, 179, 0, 0.4)' : 'none'};
+          box-shadow: ${isSelected ? '0 0 12px rgba(255, 179, 0, 0.4)' : 'none'};
           border-radius: 8px;
           display: flex;
           flex-direction: column;
@@ -210,12 +212,12 @@ export class GameArena {
           position: relative;
           cursor: pointer;
           user-select: none;
-          transition: border-color 0.12s ease;
+          transition: all 0.15s ease;
         ">
-          <span style="position: absolute; top: 2px; left: 5px; font-size: 0.65rem; color: var(--text-dim);">${idx + 1}</span>
+          <span style="position: absolute; top: 3px; left: 6px; font-size: 0.65rem; color: var(--text-dim);">${idx + 1}</span>
           ${item ? `
             <span style="font-size: 1.35rem;">${item.icon}</span>
-            <span style="font-size: 0.58rem; color: ${item.color}; font-weight: bold; margin-top: -2px;">${item.short}</span>${item.count > 1 ? `<span style="position: absolute; bottom: 2px; right: 5px; font-size: 0.65rem; color: #fff;">x${item.count}</span>` : ''}
+            <span style="font-size: 0.58rem; color: ${item.color}; font-weight: bold; margin-top: -2px;">${item.short \vert{}\vert{} item.name.split(' ')[0]}</span>${item.count > 1 ? `<span style="position: absolute; bottom: 2px; right: 5px; font-size: 0.65rem; color: #fff;">x${item.count}</span>` : ''}
           ` : `
             <span style="font-size: 0.65rem; color: rgba(255,255,255,0.15);">EMPTY</span>
           `}
@@ -261,13 +263,13 @@ export class GameArena {
       const finalAngle = this.player.angle + angleOffset;
       const b = {
         shooterId: this.player.id,
-        x: this.player.x + Math.cos(this.player.angle) * (this.player.radius + weapon.barrelLen),
-        y: this.player.y + Math.sin(this.player.angle) * (this.player.radius + weapon.barrelLen),
+        x: this.player.x + Math.cos(this.player.angle) * (this.player.radius + (weapon.barrelLen || 14)),
+        y: this.player.y + Math.sin(this.player.angle) * (this.player.radius + (weapon.barrelLen || 14)),
         vx: Math.cos(finalAngle) * weapon.speed,
         vy: Math.sin(finalAngle) * weapon.speed,
         damage: weapon.damage,
         color: weapon.bulletColor,
-        life: 75
+        life: 80
       };
       this.bullets.push(b);
       this.broadcastBullet(b);
@@ -300,7 +302,7 @@ export class GameArena {
     });
 
     this.channel
-      // 1. Host Authoritative Timer Sync
+      // 1. Authoritative Timer Sync from Host
       .on('broadcast', { event: 'host_timer_tick' }, ({ payload }) => {
         if (payload?.secondsLeft !== undefined) {
           this.matchSecondsLeft = payload.secondsLeft;
@@ -309,7 +311,7 @@ export class GameArena {
           }
         }
       })
-      // 2. Player Movement and Weapon Sync
+      // 2. Position & Weapon Sync
       .on('broadcast', { event: 'player_state' }, ({ payload }) => {
         if (!payload || payload.id === this.user.id) return;
 
@@ -339,12 +341,12 @@ export class GameArena {
           remote.weapon = payload.weapon;
         }
       })
-      // 3. Bullet Spawn Sync
+      // 3. Bullet Sync
       .on('broadcast', { event: 'bullet_fired' }, ({ payload }) => {
         if (!payload || payload.shooterId === this.user.id) return;
         this.bullets.push(payload);
       })
-      // 4. Damage Received Sync
+      // 4. Damage Sync
       .on('broadcast', { event: 'take_damage' }, ({ payload }) => {
         if (payload.targetId === this.user.id) {
           this.applyDamage(payload.damage);
@@ -355,7 +357,7 @@ export class GameArena {
           // Send 20 position packets/second
           this.broadcastInterval = setInterval(() => this.broadcastState(), 50);
 
-          // If Host, start the authoritative timer interval (ticks 1x per second)
+          // If Host, start master clock loop
           if (this.isHost) {
             const badge = document.getElementById('host-badge');
             if (badge) badge.textContent = 'HOST MASTER CLOCK';
@@ -367,7 +369,6 @@ export class GameArena {
               if (this.timerDisplay) {
                 this.timerDisplay.textContent = this.formatTime(this.matchSecondsLeft);
               }
-              // Broadcast exact second to all peers
               this.channel.send({
                 type: 'broadcast',
                 event: 'host_timer_tick',
@@ -408,9 +409,9 @@ export class GameArena {
       if (this.player.shield >= amt) {
         this.player.shield -= amt;
       } else {
-        const remaining = amt - this.player.shield;
+        const remainder = amt - this.player.shield;
         this.player.shield = 0;
-        this.player.health = Math.max(0, this.player.health - remaining);
+        this.player.health = Math.max(0, this.player.health - remainder);
       }
     } else {
       this.player.health = Math.max(0, this.player.health - amt);
@@ -452,7 +453,7 @@ export class GameArena {
     this.player.x = Math.max(pad, Math.min(this.canvas.width - pad, this.player.x));
     this.player.y = Math.max(pad, Math.min(this.canvas.height - pad, this.player.y));
 
-    // Auto-fire while holding left-click
+    // Continuous fire while holding down left mouse click
     if (this.mouse.isDown) {
       this.shootCurrentWeapon();
     }
@@ -473,18 +474,17 @@ export class GameArena {
       b.y += b.vy;
       b.life--;
 
-      // Hit registration against remote players (when fired by local player)
+      // Check hit against remote players
       if (b.shooterId === this.player.id) {
         this.remotePlayers.forEach((rp) => {
           const dist = Math.hypot(b.x - rp.x, b.y - rp.y);
           if (dist < 20) {
-            // Register hit
             this.channel.send({
               type: 'broadcast',
               event: 'take_damage',
               payload: { targetId: rp.id, damage: b.damage }
             });
-            b.life = 0; // Destroy bullet
+            b.life = 0; // Terminate bullet on hit
           }
         });
       }
@@ -568,7 +568,7 @@ export class GameArena {
     this.updateRemotePlayers();
     this.updateBullets();
 
-    // Canvas Background
+    // Clear Screen
     this.ctx.fillStyle = '#070b12';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
@@ -596,8 +596,8 @@ export class GameArena {
     this.bullets.forEach((b) => {
       this.ctx.beginPath();
       this.ctx.arc(b.x, b.y, 3, 0, Math.PI * 2);
-      this.ctx.fillStyle = b.color;
-      this.ctx.shadowColor = b.color;
+      this.ctx.fillStyle = b.color || '#fff';
+      this.ctx.shadowColor = b.color || '#fff';
       this.ctx.shadowBlur = 6;
       this.ctx.fill();
     });
