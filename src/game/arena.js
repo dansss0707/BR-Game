@@ -1,6 +1,14 @@
 import { supabase } from '../services/supabase.js';
-import { AppState, navigateTo } from '../main.js';
 import { NAME_COLORS } from '../services/profile.js';
+
+// Base weapons and items catalog
+export const WEAPON_TYPES = {
+  pistol: { id: 'pistol', name: 'Pistol', icon: '🔫', color: '#a0aec0', damage: 18, fireRate: 350 },
+  rifle: { id: 'rifle', name: 'Assault Rifle', icon: '⚡', color: '#38bdf8', damage: 24, fireRate: 150 },
+  shotgun: { id: 'shotgun', name: 'Pump Shotgun', icon: '💥', color: '#f59e0b', damage: 60, fireRate: 800 },
+  sniper: { id: 'sniper', name: 'Heavy Sniper', icon: '🎯', color: '#a855f7', damage: 95, fireRate: 1200 },
+  shield_pot: { id: 'shield_pot', name: 'Shield Mini', icon: '🧪', color: '#00d2ff', isConsumable: true, shieldAmount: 25 }
+};
 
 export class GameArena {
   constructor(canvas, room, user, profile) {
@@ -10,42 +18,53 @@ export class GameArena {
     this.user = user;
     this.profile = profile || { username: 'Player', equipped_color: 'color_white', equipped_effect: 'effect_none' };
 
-    // Canvas sizing
     this.resize();
     window.addEventListener('resize', () => this.resize());
 
-    // Local Player State
+    // Local Player Vitals & Inventory
     this.player = {
       id: user.id,
       name: profile?.username || 'Player',
       colorId: profile?.equipped_color || 'color_white',
       effectId: profile?.equipped_effect || 'effect_none',
-      x: 100 + Math.random() * 600,
-      y: 100 + Math.random() * 400,
-      radius: 18,
+      x: 200 + Math.random() * 400,
+      y: 200 + Math.random() * 300,
+      radius: 20,
       speed: 4,
-      vx: 0,
-      vy: 0
+      health: 100,
+      shield: 50,
+      angle: 0,
+      selectedSlot: 0,
+      inventory: [
+        { ...WEAPON_TYPES.rifle },
+        { ...WEAPON_TYPES.shotgun },
+        { ...WEAPON_TYPES.pistol },
+        { ...WEAPON_TYPES.shield_pot, count: 2 },
+        null
+      ]
     };
 
-    // Remote Players Map (id -> { x, y, targetX, targetY, name, colorId, effectId, particles: [] })
+    // Remote Players Map
     this.remotePlayers = new Map();
 
-    // Input state
+    // Inputs
     this.keys = {};
+    this.mouse = { x: 0, y: 0 };
     this.setupInputs();
 
-    // Desync-proof timer (Host anchors start time or falls back to room creation)
-    this.matchDurationSeconds = 120; // 2 minutes
-    this.startTimestamp = Date.now();
+    // Desync-Proof Timer Setup
+    this.matchDuration = 120; // 2 minutes
+    this.startedAtMs = room?.started_at ? new Date(room.started_at).getTime() : Date.now();
     this.timerDisplay = document.getElementById('timer-val');
 
-    // Realtime Broadcast Channel
+    // Network
     this.channel = null;
     this.broadcastInterval = null;
     this.running = false;
     this.animId = null;
 
+    this.renderHotbarUI();
+    this.updateVitalsUI();
     this.initNetwork();
   }
 
@@ -57,11 +76,97 @@ export class GameArena {
   setupInputs() {
     window.addEventListener('keydown', (e) => {
       this.keys[e.key.toLowerCase()] = true;
+
+      // 1 to 5 for Inventory hotbar selection
+      const num = parseInt(e.key);
+      if (num >= 1 && num <= 5) {
+        this.selectSlot(num - 1);
+      }
     });
 
     window.addEventListener('keyup', (e) => {
       this.keys[e.key.toLowerCase()] = false;
     });
+
+    window.addEventListener('mousemove', (e) => {
+      this.mouse.x = e.clientX;
+      this.mouse.y = e.clientY;
+      // Calculate rotation facing mouse
+      this.player.angle = Math.atan2(this.mouse.y - this.player.y, this.mouse.x - this.player.x);
+    });
+  }
+
+  selectSlot(index) {
+    if (index < 0 || index > 4) return;
+    this.player.selectedSlot = index;
+
+    // Use consumable directly if selected
+    const item = this.player.inventory[index];
+    if (item && item.isConsumable && this.player.shield < 100) {
+      this.player.shield = Math.min(100, this.player.shield + item.shieldAmount);
+      item.count = (item.count || 1) - 1;
+      if (item.count <= 0) {
+        this.player.inventory[index] = null;
+      }
+      this.updateVitalsUI();
+    }
+
+    this.renderHotbarUI();
+  }
+
+  renderHotbarUI() {
+    const bar = document.getElementById('inventory-bar');
+    if (!bar) return;
+
+    bar.innerHTML = this.player.inventory.map((item, idx) => {
+      const isSelected = this.player.selectedSlot === idx;
+      return `
+        <div class="inv-slot" data-slot="${idx}" style="
+          width: 58px; 
+          height: 58px; 
+          background: ${isSelected ? 'rgba(30, 41, 59, 0.95)' : 'rgba(15, 23, 42, 0.75)'};
+          border: 2px solid ${isSelected ? 'var(--tactical-amber)' : 'rgba(255,255,255,0.1)'};
+          box-shadow: ${isSelected ? '0 0 12px rgba(255, 179, 0, 0.4)' : 'none'};
+          border-radius: 8px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          position: relative;
+          cursor: pointer;
+          user-select: none;
+          transition: all 0.15s ease;
+        ">
+          <span style="position: absolute; top: 3px; left: 6px; font-size: 0.65rem; color: var(--text-dim);">${idx + 1}</span>
+          ${item ? `
+            <span style="font-size: 1.4rem;">${item.icon}</span>
+            <span style="font-size: 0.6rem; color: ${item.color}; font-weight: bold; margin-top: -2px;">${item.name.split(' ')[0]}</span>${item.count > 1 ? `<span style="position: absolute; bottom: 2px; right: 5px; font-size: 0.65rem; color: #fff;">x${item.count}</span>` : ''}
+          ` : `
+            <span style="font-size: 0.7rem; color: rgba(255,255,255,0.15);">EMPTY</span>
+          `}
+        </div>
+      `;
+    }).join('');
+
+    bar.querySelectorAll('.inv-slot').forEach(el => {
+      el.addEventListener('click', () => {
+        const slot = parseInt(el.dataset.slot);
+        this.selectSlot(slot);
+      });
+    });
+  }
+
+  updateVitalsUI() {
+    const hpFill = document.getElementById('hp-fill');
+    const hpText = document.getElementById('hp-text');
+    const shieldFill = document.getElementById('shield-fill');
+    const shieldText = document.getElementById('shield-text');
+
+    if (hpFill) hpFill.style.width = `${Math.max(0, this.player.health)}%`;
+    if (hpText) hpText.textContent = `${this.player.health} / 100`;
+
+    if (shieldFill) shieldFill.style.width = `${Math.max(0, this.player.shield)}%`;
+    if (shieldText) shieldText.textContent = `${this.player.shield} / 100`;
   }
 
   initNetwork() {
@@ -71,7 +176,7 @@ export class GameArena {
     });
 
     this.channel
-      .on('broadcast', { event: 'player_pos' }, ({ payload }) => {
+      .on('broadcast', { event: 'player_state' }, ({ payload }) => {
         if (!payload || payload.id === this.user.id) return;
 
         let remote = this.remotePlayers.get(payload.id);
@@ -85,52 +190,59 @@ export class GameArena {
             y: payload.y,
             targetX: payload.x,
             targetY: payload.y,
-            particles: []
+            angle: payload.angle,
+            targetAngle: payload.angle,
+            equippedWeapon: payload.equippedWeapon
           };
           this.remotePlayers.set(payload.id, remote);
         } else {
           remote.targetX = payload.x;
           remote.targetY = payload.y;
+          remote.targetAngle = payload.angle;
           remote.name = payload.name;
           remote.colorId = payload.colorId;
           remote.effectId = payload.effectId;
+          remote.equippedWeapon = payload.equippedWeapon;
         }
       })
-      .on('broadcast', { event: 'time_sync' }, ({ payload }) => {
-        // Sync timestamp from host to keep perfectly in phase
-        if (payload?.startTimestamp) {
-          this.startTimestamp = payload.startTimestamp;
+      .on('broadcast', { event: 'host_sync_time' }, ({ payload }) => {
+        // Authoritative sync from host
+        if (payload?.startedAtMs) {
+          this.startedAtMs = payload.startedAtMs;
         }
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          // Send 20 updates/second to avoid throttling
-          this.broadcastInterval = setInterval(() => this.broadcastPosition(), 50);
+          this.broadcastInterval = setInterval(() => this.broadcastState(), 50);
 
-          // If host, periodically broadcast the true match start timestamp
+          // Host emits sync time anchor
           if (this.room?.host_id === this.user.id) {
             this.channel.send({
               type: 'broadcast',
-              event: 'time_sync',
-              payload: { startTimestamp: this.startTimestamp }
+              event: 'host_sync_time',
+              payload: { startedAtMs: this.startedAtMs }
             });
           }
         }
       });
   }
 
-  broadcastPosition() {
+  broadcastState() {
     if (!this.channel) return;
+    const currentWeapon = this.player.inventory[this.player.selectedSlot];
+
     this.channel.send({
       type: 'broadcast',
-      event: 'player_pos',
+      event: 'player_state',
       payload: {
         id: this.player.id,
         name: this.player.name,
         colorId: this.player.colorId,
         effectId: this.player.effectId,
         x: Math.round(this.player.x),
-        y: Math.round(this.player.y)
+        y: Math.round(this.player.y),
+        angle: parseFloat(this.player.angle.toFixed(2)),
+        equippedWeapon: currentWeapon ? { name: currentWeapon.name, icon: currentWeapon.icon, color: currentWeapon.color } : null
       }
     });
   }
@@ -156,7 +268,6 @@ export class GameArena {
     if (this.keys['a'] || this.keys['arrowleft']) dx -= 1;
     if (this.keys['d'] || this.keys['arrowright']) dx += 1;
 
-    // Normalize diagonal movement
     if (dx !== 0 && dy !== 0) {
       dx *= 0.7071;
       dy *= 0.7071;
@@ -165,43 +276,42 @@ export class GameArena {
     this.player.x += dx * this.player.speed;
     this.player.y += dy * this.player.speed;
 
-    // Screen bounds clamp
     const pad = this.player.radius;
     this.player.x = Math.max(pad, Math.min(this.canvas.width - pad, this.player.x));
     this.player.y = Math.max(pad, Math.min(this.canvas.height - pad, this.player.y));
   }
 
   updateRemotePlayers() {
-    // Smooth interpolation (lerp) to target coordinates
     this.remotePlayers.forEach((rp) => {
       rp.x += (rp.targetX - rp.x) * 0.35;
       rp.y += (rp.targetY - rp.y) * 0.35;
+      rp.angle += (rp.targetAngle - rp.angle) * 0.35;
     });
   }
 
   updateTimer() {
     if (!this.timerDisplay) return;
 
-    // Delta from absolute start time
-    const elapsedSeconds = Math.floor((Date.now() - this.startTimestamp) / 1000);
-    const remaining = Math.max(0, this.matchDurationSeconds - elapsedSeconds);
+    // Fixed against shared start timestamp
+    const now = Date.now();
+    const elapsed = Math.floor((now - this.startedAtMs) / 1000);
+    const remaining = Math.max(0, this.matchDuration - elapsed);
 
     const mins = Math.floor(remaining / 60);
     const secs = remaining % 60;
     this.timerDisplay.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   }
 
-  drawPlayer(x, y, radius, name, colorId, effectId, isSelf = false) {
+  drawPlayer(x, y, radius, angle, name, colorId, effectId, weapon, isSelf = false) {
     const colorObj = NAME_COLORS.find(c => c.id === colorId) || NAME_COLORS[0];
     const colorHex = colorObj.color;
 
-    // 1. Draw Subtle Micro-Particles / Auras Around Player Body
+    // 1. Micro-Aura / Particles
     if (effectId && effectId !== 'effect_none') {
       this.ctx.save();
       this.ctx.fillStyle = colorHex;
       this.ctx.shadowColor = colorHex;
       this.ctx.shadowBlur = 4;
-      
       const time = Date.now() * 0.003;
       for (let i = 0; i < 3; i++) {
         const theta = time + (i * Math.PI * 2) / 3;
@@ -215,26 +325,38 @@ export class GameArena {
       this.ctx.restore();
     }
 
-    // 2. Player Body Circle
+    // 2. Visible Weapon Barrel
     this.ctx.save();
+    this.ctx.translate(x, y);
+    this.ctx.rotate(angle);
+
+    if (weapon) {
+      this.ctx.fillStyle = weapon.color || '#94a3b8';
+      this.ctx.shadowColor = weapon.color || '#94a3b8';
+      this.ctx.shadowBlur = 4;
+      // Gun barrel pointing along forward direction
+      this.ctx.fillRect(radius - 2, -3, 14, 6);
+    }
+
+    // Player Body
     this.ctx.beginPath();
-    this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+    this.ctx.arc(0, 0, radius, 0, Math.PI * 2);
     this.ctx.fillStyle = isSelf ? '#1e293b' : '#0f172a';
     this.ctx.fill();
     this.ctx.lineWidth = 2.5;
     this.ctx.strokeStyle = colorHex;
     this.ctx.stroke();
 
-    // Direction Pip / Core
+    // Hands
+    this.ctx.fillStyle = '#64748b';
     this.ctx.beginPath();
-    this.ctx.arc(x, y, radius * 0.45, 0, Math.PI * 2);
-    this.ctx.fillStyle = colorHex;
-    this.ctx.shadowColor = colorHex;
-    this.ctx.shadowBlur = 6;
+    this.ctx.arc(radius - 2, 8, 4, 0, Math.PI * 2);
+    this.ctx.arc(radius - 2, -8, 4, 0, Math.PI * 2);
     this.ctx.fill();
+
     this.ctx.restore();
 
-    // 3. Above-Head Nameplate with Glow & Custom Color
+    // 3. Above-Head Nameplate
     this.ctx.save();
     this.ctx.font = 'bold 12px "JetBrains Mono", monospace';
     this.ctx.textAlign = 'center';
@@ -243,8 +365,6 @@ export class GameArena {
       this.ctx.shadowColor = colorHex;
       this.ctx.shadowBlur = 8;
     }
-    
-    // Draw Nameplate text 26px above player head
     const label = isSelf ? `${name} (You)` : name;
     this.ctx.fillText(label, x, y - radius - 10);
     this.ctx.restore();
@@ -258,14 +378,14 @@ export class GameArena {
     this.updateTimer();
 
     // Clear Canvas
-    this.ctx.fillStyle = '#080d16';
+    this.ctx.fillStyle = '#070b12';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-    // Subtle Grid lines
+    // Grid Floor
     this.ctx.save();
-    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
     this.ctx.lineWidth = 1;
-    const gridSize = 40;
+    const gridSize = 45;
     for (let x = 0; x < this.canvas.width; x += gridSize) {
       this.ctx.beginPath();
       this.ctx.moveTo(x, 0);
@@ -282,17 +402,30 @@ export class GameArena {
 
     // Render Remote Players
     this.remotePlayers.forEach((rp) => {
-      this.drawPlayer(rp.x, rp.y, 18, rp.name, rp.colorId, rp.effectId, false);
+      this.drawPlayer(
+        rp.x,
+        rp.y,
+        18,
+        rp.angle || 0,
+        rp.name,
+        rp.colorId,
+        rp.effectId,
+        rp.equippedWeapon,
+        false
+      );
     });
 
     // Render Local Player
+    const currentWeapon = this.player.inventory[this.player.selectedSlot];
     this.drawPlayer(
       this.player.x,
       this.player.y,
       this.player.radius,
+      this.player.angle,
       this.player.name,
       this.player.colorId,
       this.player.effectId,
+      currentWeapon,
       true
     );
 
