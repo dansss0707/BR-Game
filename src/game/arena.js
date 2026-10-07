@@ -2,7 +2,7 @@ import { supabase } from './services/supabase.js';
 import { NAME_COLORS } from './services/profile.js';
 
 // Base weapons and items catalog
-export const WEAPON_TYPES = {
+export const WEAPON_REGISTRY = {
   ar: { 
     id: 'ar', 
     name: 'Assault Rifle', 
@@ -22,7 +22,7 @@ export const WEAPON_TYPES = {
     short: 'PUMP', 
     icon: '💥', 
     color: '#f59e0b', 
-    damage: 16, // per pellet (x5)
+    damage: 16, // per pellet (5 pellets)
     speed: 13, 
     cooldown: 800, 
     pellets: 5, 
@@ -56,8 +56,8 @@ export const WEAPON_TYPES = {
     bulletColor: '#e9d5ff',
     barrelLen: 22
   },
-  shield_pot: { 
-    id: 'shield_pot', 
+  mini_pot: { 
+    id: 'mini_pot', 
     name: 'Shield Mini', 
     short: 'SHIELD', 
     icon: '🧪', 
@@ -76,20 +76,22 @@ export class GameArena {
     this.user = user;
     this.profile = profile || { username: 'Player', equipped_color: 'color_white', equipped_effect: 'effect_none' };
 
-    // Host status dictates authoritative clock
-    this.isHost = !room || room.host_id === user.id;
+    // Authoritative Host Check
+    this.isHost = !room || room.host_id === user?.id;
 
+    // Viewport Size Setup
     this.resize();
-    window.addEventListener('resize', () => this.resize());
+    this.handleResize = () => this.resize();
+    window.addEventListener('resize', this.handleResize);
 
     // Local Player Vitals & Inventory
     this.player = {
-      id: user.id,
-      name: profile?.username || 'Player',
-      colorId: profile?.equipped_color || 'color_white',
-      effectId: profile?.equipped_effect || 'effect_none',
-      x: 200 + Math.random() * 400,
-      y: 200 + Math.random() * 300,
+      id: user?.id || 'player_' + Math.random().toString(36).slice(2, 7),
+      name: this.profile?.username || 'Player',
+      colorId: this.profile?.equipped_color || 'color_white',
+      effectId: this.profile?.equipped_effect || 'effect_none',
+      x: 180 + Math.random() * 400,
+      y: 180 + Math.random() * 300,
       radius: 20,
       speed: 4.2,
       health: 100,
@@ -98,84 +100,90 @@ export class GameArena {
       selectedSlot: 0,
       lastShotTime: 0,
       inventory: [
-        { ...WEAPON_TYPES.ar },
-        { ...WEAPON_TYPES.shotgun },
-        { ...WEAPON_TYPES.pistol },
-        { ...WEAPON_TYPES.sniper },
-        { ...WEAPON_TYPES.shield_pot }
+        { ...WEAPON_REGISTRY.ar },
+        { ...WEAPON_REGISTRY.shotgun },
+        { ...WEAPON_REGISTRY.pistol },
+        { ...WEAPON_REGISTRY.sniper },
+        { ...WEAPON_REGISTRY.mini_pot }
       ]
     };
 
-    // Remote Players Map: id -> player
+    // Remote Players Map: id -> player object
     this.remotePlayers = new Map();
 
     // Active Projectiles
     this.bullets = [];
 
-    // Inputs
+    // Inputs & Listeners
     this.keys = {};
     this.mouse = { x: 0, y: 0, isDown: false };
     this.setupInputs();
 
-    // Authoritative Host Timer State
+    // Host-Synchronized Timer State
     this.matchSecondsLeft = 120; // 2 minutes
     this.timerDisplay = document.getElementById('timer-val');
     this.hostTimerInterval = null;
 
-    // Network
+    // Networking
     this.channel = null;
     this.broadcastInterval = null;
     this.running = false;
     this.animId = null;
 
+    // UI Initialization
     this.renderHotbarUI();
     this.updateVitalsUI();
     this.initNetwork();
   }
 
   resize() {
-    this.canvas.width = window.innerWidth;
-    this.canvas.height = window.innerHeight;
+    this.canvas.width = window.innerWidth || document.documentElement.clientWidth || 1024;
+    this.canvas.height = window.innerHeight || document.documentElement.clientHeight || 768;
   }
 
   setupInputs() {
-    window.addEventListener('keydown', (e) => {
+    this.handleKeyDown = (e) => {
       this.keys[e.key.toLowerCase()] = true;
       const num = parseInt(e.key);
       if (num >= 1 && num <= 5) {
         this.selectSlot(num - 1);
       }
-    });
+    };
 
-    window.addEventListener('keyup', (e) => {
+    this.handleKeyUp = (e) => {
       this.keys[e.key.toLowerCase()] = false;
-    });
+    };
 
-    window.addEventListener('mousemove', (e) => {
+    this.handleMouseMove = (e) => {
       this.mouse.x = e.clientX;
       this.mouse.y = e.clientY;
       this.player.angle = Math.atan2(this.mouse.y - this.player.y, this.mouse.x - this.player.x);
-    });
+    };
 
-    window.addEventListener('mousedown', (e) => {
+    this.handleMouseDown = (e) => {
       if (e.button === 0) {
         this.mouse.isDown = true;
         this.shootCurrentWeapon();
       }
-    });
+    };
 
-    window.addEventListener('mouseup', (e) => {
+    this.handleMouseUp = (e) => {
       if (e.button === 0) {
         this.mouse.isDown = false;
       }
-    });
+    };
+
+    window.addEventListener('keydown', this.handleKeyDown);
+    window.addEventListener('keyup', this.handleKeyUp);
+    window.addEventListener('mousemove', this.handleMouseMove);
+    window.addEventListener('mousedown', this.handleMouseDown);
+    window.addEventListener('mouseup', this.handleMouseUp);
   }
 
   selectSlot(index) {
     if (index < 0 || index > 4) return;
     this.player.selectedSlot = index;
 
-    // Use consumable directly if chosen
     const item = this.player.inventory[index];
     if (item && item.isConsumable) {
       if (this.player.shield < 100) {
@@ -202,7 +210,7 @@ export class GameArena {
           width: 58px; 
           height: 58px; 
           background: ${isSelected ? 'rgba(30, 41, 59, 0.95)' : 'rgba(15, 23, 42, 0.75)'};
-          border: 2px solid ${isSelected ? 'var(--tactical-amber)' : 'rgba(255,255,255,0.1)'};
+          border: 2px solid ${isSelected ? 'var(--tactical-amber, #f59e0b)' : 'rgba(255,255,255,0.1)'};
           box-shadow: ${isSelected ? '0 0 12px rgba(255, 179, 0, 0.4)' : 'none'};
           border-radius: 8px;
           display: flex;
@@ -214,7 +222,7 @@ export class GameArena {
           user-select: none;
           transition: all 0.15s ease;
         ">
-          <span style="position: absolute; top: 3px; left: 6px; font-size: 0.65rem; color: var(--text-dim);">${idx + 1}</span>
+          <span style="position: absolute; top: 3px; left: 6px; font-size: 0.65rem; color: #94a3b8;">${idx + 1}</span>
           ${item ? `
             <span style="font-size: 1.35rem;">${item.icon}</span>
             <span style="font-size: 0.58rem; color: ${item.color}; font-weight: bold; margin-top: -2px;">${item.short \vert{}\vert{} item.name.split(' ')[0]}</span>${item.count > 1 ? `<span style="position: absolute; bottom: 2px; right: 5px; font-size: 0.65rem; color: #fff;">x${item.count}</span>` : ''}
@@ -302,7 +310,7 @@ export class GameArena {
     });
 
     this.channel
-      // 1. Authoritative Timer Sync from Host
+      // 1. Authoritative Clock Tick Sync
       .on('broadcast', { event: 'host_timer_tick' }, ({ payload }) => {
         if (payload?.secondsLeft !== undefined) {
           this.matchSecondsLeft = payload.secondsLeft;
@@ -311,9 +319,9 @@ export class GameArena {
           }
         }
       })
-      // 2. Position & Weapon Sync
+      // 2. Position, Rotation & Weapon Sync
       .on('broadcast', { event: 'player_state' }, ({ payload }) => {
-        if (!payload || payload.id === this.user.id) return;
+        if (!payload || payload.id === this.user?.id) return;
 
         let remote = this.remotePlayers.get(payload.id);
         if (!remote) {
@@ -343,12 +351,12 @@ export class GameArena {
       })
       // 3. Bullet Sync
       .on('broadcast', { event: 'bullet_fired' }, ({ payload }) => {
-        if (!payload || payload.shooterId === this.user.id) return;
+        if (!payload || payload.shooterId === this.user?.id) return;
         this.bullets.push(payload);
       })
       // 4. Damage Sync
       .on('broadcast', { event: 'take_damage' }, ({ payload }) => {
-        if (payload.targetId === this.user.id) {
+        if (payload.targetId === this.user?.id) {
           this.applyDamage(payload.damage);
         }
       })
@@ -357,7 +365,7 @@ export class GameArena {
           // Send 20 position packets/second
           this.broadcastInterval = setInterval(() => this.broadcastState(), 50);
 
-          // If Host, start master clock loop
+          // If Host, start the master ticking clock
           if (this.isHost) {
             const badge = document.getElementById('host-badge');
             if (badge) badge.textContent = 'HOST MASTER CLOCK';
@@ -430,6 +438,13 @@ export class GameArena {
     if (this.broadcastInterval) clearInterval(this.broadcastInterval);
     if (this.hostTimerInterval) clearInterval(this.hostTimerInterval);
     if (this.channel) supabase.removeChannel(this.channel);
+
+    window.removeEventListener('resize', this.handleResize);
+    window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('keyup', this.handleKeyUp);
+    window.removeEventListener('mousemove', this.handleMouseMove);
+    window.removeEventListener('mousedown', this.handleMouseDown);
+    window.removeEventListener('mouseup', this.handleMouseUp);
   }
 
   updateMovement() {
@@ -474,7 +489,7 @@ export class GameArena {
       b.y += b.vy;
       b.life--;
 
-      // Check hit against remote players
+      // Hit registration against remote targets
       if (b.shooterId === this.player.id) {
         this.remotePlayers.forEach((rp) => {
           const dist = Math.hypot(b.x - rp.x, b.y - rp.y);
@@ -484,7 +499,7 @@ export class GameArena {
               event: 'take_damage',
               payload: { targetId: rp.id, damage: b.damage }
             });
-            b.life = 0; // Terminate bullet on hit
+            b.life = 0;
           }
         });
       }
@@ -496,7 +511,7 @@ export class GameArena {
   }
 
   drawPlayer(x, y, radius, angle, name, colorId, effectId, weapon, isSelf = false) {
-    const colorObj = NAME_COLORS.find(c => c.id === colorId) || NAME_COLORS[0];
+    const colorObj = (NAME_COLORS && NAME_COLORS.find(c => c.id === colorId)) || { color: '#ffffff', glow: 'none' };
     const colorHex = colorObj.color;
 
     // 1. Orbiting Micro-particles
@@ -516,12 +531,11 @@ export class GameArena {
       this.ctx.restore();
     }
 
-    // 2. Body & Weapon
+    // 2. Body & Weapon Barrel
     this.ctx.save();
     this.ctx.translate(x, y);
     this.ctx.rotate(angle);
 
-    // Gun Barrel
     if (weapon) {
       this.ctx.fillStyle = weapon.color || '#94a3b8';
       this.ctx.shadowColor = weapon.color || '#94a3b8';
@@ -568,7 +582,7 @@ export class GameArena {
     this.updateRemotePlayers();
     this.updateBullets();
 
-    // Clear Screen
+    // Canvas Background
     this.ctx.fillStyle = '#070b12';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
